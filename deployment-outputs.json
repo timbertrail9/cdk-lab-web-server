@@ -1,0 +1,12 @@
+{
+  "CdkLabNetworkStack": {
+    "ExportsOutputRefcdklabvpcPrivateSubnet01Subnet2SubnetE68A373E2008506A": "subnet-074139300c5323ec4",
+    "ExportsOutputRefcdklabvpcPublicSubnet01Subnet2SubnetCD0AB391D1F15517": "subnet-09d5ecfa4eb7d00f5",
+    "ExportsOutputRefcdklabvpc77E9E1125CA8C293": "vpc-0db2cf6697f97f629",
+    "ExportsOutputRefcdklabvpcPublicSubnet01Subnet1Subnet332B15812751D3DF": "subnet-008c057a29c43e68f",
+    "ExportsOutputRefcdklabvpcPrivateSubnet01Subnet1Subnet144F65B9E94BF4C5": "subnet-05e7cd0350e6a4f98"
+  },
+  "CdkLabWebServerStack": {
+    "WebsiteUrl": "http://CdkLab-WebLo-pyA9Fnhw66dq-1054055564.us-east-1.elb.amazonaws.com"
+  }
+}

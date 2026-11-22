@@ -1,0 +1,417 @@
+CDK WEBSITE LAB — DISCUSSION AND LEARNING LOG
+Started: November 22, 2026 (America/Chicago)
+
+PURPOSE AND WORKING AGREEMENT
+Help the student understand and complete the assignment one step at a time.
+Explain each code change and its purpose before making it. Keep the pace
+interactive rather than implementing the entire assignment in one pass.
+Update this file with questions, answers, decisions, changes, and verification
+results as the work progresses. Do not record credentials or database passwords.
+
+ASSIGNMENT REQUIREMENTS
+- Network stack: two Availability Zones, each with one public and one private
+  subnet (four subnets total).
+- Server stack: one web server in each public subnet; RDS MySQL using both
+  private subnets as its database subnet group; a load balancer distributing
+  incoming requests to the web servers.
+- Web server security group: inbound TCP port 80 from anywhere.
+- Database security group: inbound TCP port 3306 only from the web server
+  security group.
+- Create a new GitHub repository, commit and push the project. Make the
+  repository public or provide the instructor the requested access.
+- Submit the GitHub URL and a report with CLI/browser verification and outputs.
+- Clean up the deployed resources to minimize AWS charges.
+
+SESSION — NOVEMBER 22, 2026
+Student request/question:
+Can you help me learn, create the required report, walk through code changes
+one by one, and maintain a text summary of our discussions and questions?
+
+Response/agreement:
+Proceed in small teaching steps. Maintain this log and an evidence-based report
+draft. Inspect the starter before modifying infrastructure code.
+
+Starting project observations:
+- This is a Python AWS CDK project.
+- app.py creates CdkLabNetworkStack and passes its VPC to CdkLabWebServerStack.
+- cdk_lab_network_stack.py defines a VPC with CIDR 10.0.0.0/16 and only a public
+  subnet configuration. It does not explicitly set the Availability Zone count.
+- cdk_lab_web_server_stack.py defines one t2.micro Amazon Linux 2 EC2 instance,
+  an EC2 IAM role with Systems Manager permissions, an S3 script asset, and an
+  inbound HTTP rule. Instance subnet selection is not explicit.
+- configure.sh installs packages and starts Apache. It does not create a custom
+  web page identifying the server.
+- There is no RDS instance or load balancer in the source.
+- requirements.txt pins aws-cdk-lib to 2.118.0.
+- The sample unit test is unfinished and omits the required VPC argument.
+- A local Git repository already exists on master, tracking origin/master.
+  The initial working tree was clean. The new assignment repository is pending.
+- Local cdk.out files exist; these do not establish that AWS resources are
+  currently deployed. Live AWS state has not been inspected.
+
+Files created this session:
+- DISCUSSION_LOG.txt (this file).
+- ASSIGNMENT_REPORT.txt (draft; no live verification results yet).
+
+Current checkpoint:
+Infrastructure code has not been changed. Nothing has been deployed, destroyed,
+committed, or published during this session.
+
+NEXT TEACHING STEP
+Explain and update only the network stack: explicitly choose two Availability
+Zones and define public and private subnet groups. Discuss the private subnet
+routing choice and any cost implications before implementing it. Then inspect
+the synthesized CloudFormation to confirm the intended four subnets.
+
+LATER STEPS
+1. Add the second web server and explicitly select the public subnets.
+2. Make the web page identify its server for load-balancer verification.
+3. Add RDS MySQL, its private subnet group, and security group rules.
+4. Add the load balancer, listener, targets, health checks, and useful outputs.
+5. Validate the complete templates, review the deployment diff, and deploy.
+6. Capture actual CLI/browser evidence and complete the report.
+7. Create the new GitHub repository and push the reviewed project.
+8. Delete lab resources and capture cleanup evidence.
+
+CONTEXT FOR FUTURE SESSIONS
+Read this log and ASSIGNMENT_REPORT.txt, inspect the current Git diff, and resume
+from the current checkpoint. Preserve the student's one-step-at-a-time pace.
+
+FOLLOW-UP — EXAMINING THE EXISTING INFRASTRUCTURE
+Student request:
+"yes, let's examin the existing infrastructure and think about how to modify it"
+
+Explanation and proposed design:
+- app.py creates the network stack first and supplies its VPC object to the
+  server stack. Keep this separation for the assignment.
+- The existing VPC declaration uses the 10.0.0.0/16 private address range.
+- SubnetConfiguration defines a subnet group: CDK creates a subnet from that
+  group in each selected Availability Zone. PublicSubnet01 is a group name,
+  not a guarantee that only one subnet is created.
+- Propose explicitly setting max_azs=2 and adding a PRIVATE_ISOLATED group.
+  With the existing PUBLIC group, this gives four subnets across two AZs.
+- Propose /24 subnet ranges (256 addresses each) within the VPC's /16 range.
+- Isolated subnets have no internet route but permit internal routing in the
+  VPC, subject to security rules. They suit the database-only requirement and
+  avoid NAT gateway charges. PRIVATE_WITH_EGRESS is the alternative when
+  outbound internet connectivity is needed, typically through a billed NAT.
+- Retain the current VPC construct ID and public subnet group name in the
+  proposed code to avoid unnecessary identifier changes.
+- The existing EC2 declaration does not specify vpc_subnets. Adding a private
+  subnet group can change CDK's default placement; explicitly selecting public
+  subnets will be necessary before deployment.
+- No infrastructure source changes or AWS operations in this follow-up.
+- Inspected the existing local CdkLabNetworkStack.template.json: one VPC,
+  two public subnets in AZ indices 0 and 1, one internet gateway, and no NAT
+  gateway. Existing subnet CIDRs are 10.0.0.0/17 and 10.0.128.0/17. This is
+  existing generated output, not fresh synthesis or live AWS evidence.
+- Proposed /24 allocation changes existing subnet CIDRs; if deployed already,
+  it can require subnet replacement. Review live state and cdk diff before
+  any deployment, even when construct names are retained.
+
+Reference consulted:
+https://docs.aws.amazon.com/cdk/api/v2/python/aws_cdk.aws_ec2/README.html
+https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_ec2.Vpc.html
+
+Next checkpoint:
+Review the proposed VPC declaration with the student, then implement the network
+change and verify newly synthesized templates. Current source remains unchanged.
+
+MANUAL EDIT REVIEW — NOVEMBER 22, 2026
+Student questions/request:
+Why choose /24? Review my manual edits and record mistakes going forward.
+
+Answer:
+/24 leaves 8 IPv4 host bits: 2^(32-24) = 256 addresses, 251 usable after
+AWS reserves five. It is a convenient lab size with room for growth, not a
+requirement. Omitting cidr_mask is valid; CDK allocates ranges automatically.
+
+Review:
+Student correctly added max_azs=2, nat_gateways=0, and a PRIVATE_ISOLATED
+subnet group. Omitting /24 is not a mistake.
+
+Mistake 1 — extra closing parenthesis:
+The private subnet configuration line ends in ")])", already closing the VPC
+call. The following line closes it again. Python AST validation reported:
+  File "<unknown>", line 31
+  SyntaxError: unmatched ')'
+Correction: change the ending of the private subnet line from ")])" to ")]",
+keeping the final line's closing parenthesis for the VPC call.
+Source has been left unchanged so the student can make the correction.
+Full synthesis has not been attempted while this syntax error remains.
+
+Current checkpoint supersedes earlier checkpoints:
+Student's manual network changes are present, with the syntax error above.
+Next: student fixes the parenthesis, then validate syntax and synthesize.
+
+FOLLOW-UP CHECK
+Student said the parenthesis was corrected and requested the next step.
+The file on disk still ends the private subnet line with ")])", followed by
+another ")". Rechecking Python syntax still reports unmatched ')' at line 31.
+This is the same unresolved mistake, not a new mistake. The editor change may
+not have been saved. No source edits or synthesis performed; next step remains
+saving the correction so that the private subnet line ends with ")]".
+
+SAVED CORRECTION AND NETWORK VALIDATION
+Student confirmed the file was saved. Python syntax check now passes; the
+extra-parenthesis mistake is resolved.
+Ran: cdk synth CdkLabNetworkStack --app '.venv/bin/python app.py' --no-lookups
+     --output /tmp/cdk-lab-network-review
+Result: exit code 0. Fresh template has four subnets across AZ indices 0 and 1,
+two public and two isolated, no NAT gateways, and two internet-gateway routes.
+Automatic subnet allocation produced /18 ranges, not /24; this is valid.
+The CDK cache initially hit a sandbox permission error; execution with approved
+cache access succeeded. This was an environment issue, not a student mistake.
+No AWS resources deployed. Next: explicitly select public subnets for EC2.
+
+QUESTION — WHAT SELECTED TWO AVAILABILITY ZONES?
+Student asked which code change selected two AZs and what happens next.
+Answer: max_azs=2 in ec2.Vpc selects up to two available AZs. Each of the two
+SubnetConfiguration entries creates one subnet per selected AZ, giving four
+subnets. The fresh template confirms AZ indices 0 and 1. The starter already
+generated two AZs under its environment-agnostic defaults; this change makes
+the intended limit explicit.
+Next: add vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC)
+to the existing ec2.Instance call, save, and synthesize to check placement.
+Afterward, expand to one web server per public subnet. No source edit was
+made while answering this question.
+
+PUBLIC SUBNET PLACEMENT — SAVED AND VERIFIED
+Student added vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC)
+to the existing EC2 instance. Syntax check passed; no mistakes found in this edit.
+Ran: cdk synth CdkLabWebServerStack --app '.venv/bin/python app.py' --no-lookups
+     --output /tmp/cdk-lab-public-server-review --quiet
+Result: exit code 0. Fresh server template contains one EC2 instance whose
+SubnetId imports the network stack's PublicSubnet01Subnet1 subnet export.
+This verifies template placement, not a live deployment. No resources deployed.
+Next: explain iterating over cdk_lab_vpc.public_subnets to create one server
+per subnet, with a unique construct ID and user data configuration for each.
+
+QUESTION — REPLACING THE INSTANCE BLOCK AND CHANGING ORDER
+Student asked whether to replace lines 29–34 with the proposed loop, then why
+the ordering must change.
+Explanation: the script asset is shared and should be created once before the
+loop, because per-instance statements inside the loop need to reference it.
+Instance creation, script download/execution configuration, read permission,
+and HTTP configuration belong inside the loop so both instances receive them.
+If those statements remain after the loop, cdk_lab_web_instance refers only to
+the last instance. Creating an asset with ID "Asset" twice under the same stack
+would cause a duplicate construct ID error. Moving it before the loop is the
+simple way to share it; it is not a special AWS requirement that S3 resources
+must be deployed before EC2. Python constructs a resource definition graph;
+user-data commands execute later on EC2 at launch.
+No additional student mistake established by these questions. Source edits
+have not been inspected since the last successful public-placement check.
+
+QUESTION — DID THE ORIGINAL CODE CALL THE SCRIPT?
+Student requested the complete edits and asked why the asset originally came
+after instance creation but should now precede the loop.
+Clarification: ec2.Instance creates a Python/CDK resource definition, not a live
+server. The original code then creates the script asset and adds download and
+execution commands to that instance's user data. It did configure execution.
+The original order was instance -> asset -> configure instance. Proposed order
+is asset -> loop(instance -> configure instance). Both define the asset before
+the first statement that references it. The instance constructor itself does
+not reference the asset. Moving the shared asset outside and before the loop
+lets both iterations reference it without creating duplicate assets.
+The asset packages the existing configure.sh; it does not generate that script.
+Complete replacement shown for the block from '# Create an EC2 instance'
+through the end of the file. Infrastructure source left for student to edit.
+
+TWO-SERVER EDIT REVIEW
+Student asked whether edits look correct. New shared asset and loop are correct,
+but old code starting at # Script in S3 as Asset (line 72) remains below.
+Mistake 2: retained original block after inserting its replacement, creating
+a duplicate Asset construct. Syntax PASS; synthesis FAILED (exit 1):
+There is already a Construct with name Asset in Stack [CdkLabWebServerStack].
+Correction: remove the old trailing block from # Script in S3 as Asset to EOF.
+Source left unchanged for student correction. No deployment performed.
+
+TWO-SERVER VERIFICATION — November 22, 2026
+Duplicate trailing block removed; mistake 2 resolved. Python syntax PASS.
+Command: cdk synth CdkLabWebServerStack --app ".venv/bin/python app.py" --no-lookups --output /tmp/cdk-lab-two-server-review --quiet
+Actual app argument: .venv/bin/python app.py (passed as one quoted argument).
+Synthesis exit code: 0. Fresh template contains two EC2 instances importing
+distinct public subnet exports: PublicSubnet01Subnet1 and PublicSubnet01Subnet2.
+Both user-data definitions download and execute the same S3 script asset.
+Shared role has S3 read permissions. Both current instance security groups
+allow TCP 80 from 0.0.0.0/0. These are template checks, not live AWS evidence.
+No deployment performed. Next: one shared web-server security group for both
+instances, to later serve as the allowed source for RDS port 3306.
+
+SHARED WEB SERVER SECURITY GROUP — November 22, 2026
+Created WebServerSecurityGroup before the loop, added HTTP ingress once,
+passed security_group=web_server_security_group to both instances, and removed
+the old per-instance HTTP rule. No student mistake in this step.
+Command: cdk synth CdkLabWebServerStack --app ".venv/bin/python app.py" --no-lookups --output /tmp/cdk-lab-shared-sg-review --quiet
+Synthesis exit: 0. Template inspection: PASS: 1 shared security group; both EC2 instances reference it; TCP 80 allowed from 0.0.0.0/0.
+No resources deployed. Next: explain and add RDS private subnet group and
+database security group, permitting 3306 only from this shared web group.
+
+DATABASE SECURITY GROUP ADDED
+Created DatabaseSecurityGroup with TCP 3306 ingress only from the shared
+WebServerSecurityGroup. Synthesis exit 0; generated standalone ingress rule
+verified with correct source/destination groups and no public CIDR source.
+Command: cdk synth CdkLabWebServerStack --app ".venv/bin/python app.py" --no-lookups --output /tmp/cdk-lab-db-sg-review --quiet
+No student mistake. No deployment. This group awaits attachment to RDS.
+Next: define the RDS subnet group using both isolated private subnets.
+
+QUESTION — RDS AND SECURITY GROUP SYNTAX
+Student asked what RDS is and whether the database security group is defined
+as cdk_lab_vpc and allows 3306 from the web-server group.
+Answer: Amazon Relational Database Service is a managed relational database
+service; this assignment uses its MySQL engine. AWS handles infrastructure
+management tasks; EC2 hosts the web servers while RDS hosts the database.
+vpc=cdk_lab_vpc places the security group inside that VPC; the group is not
+the VPC. ec2.SecurityGroup(...) constructs the group, stored in the Python
+variable database_security_group. add_ingress_rule(...) adds an incoming rule:
+source=web_server_security_group, port=TCP 3306, final string=description.
+The source identifies network interfaces associated with that group, not a
+public IP range. The database group must later be attached to the RDS instance.
+Network permission does not replace database username/password authentication.
+No source changes or new student mistake; next step remains RDS subnet group.
+
+RDS SUBNET GROUP ADDED
+Imported aws_rds as rds and defined DatabaseSubnetGroup using PRIVATE_ISOLATED
+selection in the existing VPC. This selects both private subnets, not public ones.
+Command: cdk synth CdkLabWebServerStack --app ".venv/bin/python app.py" --no-lookups --output /tmp/cdk-lab-db-subnets-review --quiet
+Exit: 0. Template check PASS: one DBSubnetGroup with two distinct private
+subnet imports (PrivateSubnet01Subnet1 and PrivateSubnet01Subnet2).
+No database instance yet; no deployment. No student mistake in this step.
+Next: define MySQL instance, credentials, lab cleanup behavior and attach the
+existing database security group and subnet group.
+
+QUESTION — DOES THE SUBNET GROUP LIMIT MYSQL PLACEMENT?
+Student asked whether selecting a subnet group prevents MySQL from using other
+subnets, what happens without an explicit group, and what comes next.
+Answer: when passed as subnet_group to the RDS instance, it limits eligible
+subnets for database placement. The current declaration alone is not attached
+to an instance yet. This is placement, not a firewall or login rule.
+If subnet_group is omitted, CDK DatabaseInstance creates a group automatically
+using vpc_subnets (or default VPC subnet selection if that is omitted too).
+Explicit definition makes the assignment requirement visible and verifiable.
+Next: define one RDS MySQL instance and pass database_subnet_group and
+database_security_group, with public access disabled and generated credentials.
+No source changes or student mistake in this explanation.
+
+MYSQL INSTANCE ADDED — November 22, 2026
+Defined one RDS MySQL instance using db.t3.micro, 20 GiB encrypted storage,
+existing private DB subnet group and database security group, TCP 3306,
+public access disabled. Generated labadmin credentials stored in Secrets Manager.
+Single-AZ instance; two eligible subnets do not imply two database instances.
+Lab cleanup settings: no automated backups, deletion protection disabled,
+DESTROY removal policy on database and generated secret (no final snapshot).
+These settings deliberately discard lab data at cleanup.
+Engine version is not pinned: AWS selects its default at deployment. Before
+deploying, check region support for engine default and db.t3.micro together.
+Command: cdk synth CdkLabWebServerStack --app ".venv/bin/python app.py" --no-lookups --output /tmp/cdk-lab-mysql-review --quiet
+Exit: 0. Template assertions PASS: exactly one MySQL instance, correct subnet
+and security group references, private access, encryption, secret password
+reference, and Delete policy. No deployment or live connectivity test yet.
+No student mistake. Next: review these settings, then add load balancer.
+
+COST REDUCTION REQUEST
+Student requested minimum feasible storage and lower-cost settings.
+20 GiB is already the RDS MySQL general-purpose storage minimum; retained it.
+Changed database class from db.t3.micro to db.t4g.micro and storage from
+implicit gp2 to explicit gp3. Retained Single-AZ, zero backup retention, no
+NAT, and lab destroy policies. No additional performance or storage scaling
+options enabled. Generated credentials retained in Secrets Manager.
+Command: cdk synth CdkLabWebServerStack --app ".venv/bin/python app.py" --no-lookups --output /tmp/cdk-lab-cost-review --quiet
+Exit: 0. Template assertions PASS: db.t4g.micro, gp3, 20 GiB, Single-AZ,
+backups disabled, private access. Live region/engine availability and account
+credits remain unverified; exact savings not claimed. No deployment.
+MySQL clients on x86 EC2 can connect to an ARM-based RDS server over SQL.
+No student mistake. Next remains load balancer, with regional deployment
+compatibility/pricing check before creating any AWS resources.
+References:
+https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Storage.html
+https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Concepts.DBInstanceClass.Support.html
+https://aws.amazon.com/rds/mysql/pricing/
+
+LOAD BALANCER ADDED
+Added public Application Load Balancer in both public subnets, HTTP listener
+on 80, a target group containing both EC2 instances on 80, and WebsiteUrl output.
+Collected instances in web_servers during the loop for later target registration.
+Health check expects HTTP 200 at /. Existing configure.sh has no index page;
+next step MUST add a page (identifying each server) before deploying so the
+health check can succeed and load distribution can be demonstrated.
+Command: cdk synth CdkLabWebServerStack --app ".venv/bin/python app.py" --no-lookups --output /tmp/cdk-lab-alb-review --quiet
+Exit 0. Template assertions PASS: public ALB in two public subnets, HTTP
+listener forwarding to both distinct EC2 instances, / health check, URL output.
+No live health verification, deployment, or new student mistake. Remaining:
+web page/startup review, deployment compatibility and diff, deploy and capture
+evidence, GitHub publication, final report, cleanup, Canvas submission.
+
+QUESTION — CFNOUTPUT
+Student asked what CfnOutput means. Explained CloudFormation output, its ID,
+value, description, f-string interpolation, and how the WebsiteUrl output
+provides the assigned load balancer address after deployment.
+
+SERVER IDENTIFICATION PAGE ADDED
+Student asked what comes next. Added HTML index page creation in configure.sh
+before Apache starts. Unquoted heredoc expands hostname on each EC2 server
+at boot, so both use the same script but serve different identifying text.
+Checks: sh -n cdk_lab_web_server/configure.sh passed; cdk synth exit 0 using
+--app ".venv/bin/python app.py" --no-lookups --output /tmp/cdk-lab-webpage-review --quiet.
+Verified staged shell asset exactly matches the updated source script.
+These checks do not run yum or prove Apache startup; live verification pending.
+Existing legacy Amazon Linux 2 package commands and AMI compatibility still
+need review before deployment. Next: startup/runtime compatibility review,
+then region selection and deployment diff. No deployment or student mistake.
+
+STARTUP COMPATIBILITY UPDATED
+Replaced Amazon Linux 2 with latest_amazon_linux2023 (template references
+AL2023 kernel 6.1 x86_64 SSM parameter). Updated script to bash, set -euo
+pipefail, and dnf install -y httpd mariadb105. Removed obsolete extras
+commands and unused PHP; retained MariaDB client for RDS verification.
+Bash syntax PASS, CDK synthesis exit 0, image reference and script asset PASS.
+Output directory: /tmp/cdk-lab-al2023-review. No live installation tested yet.
+No student mistake or deployment. Next: AWS region, credentials, regional
+compatibility checks, and deployment diff.
+Sources: https://docs.aws.amazon.com/AL2/latest/relnotes/relnotes-20261118.html
+https://docs.aws.amazon.com/linux/al2023/ug/ec2-lamp-amazon-linux-2023.html
+
+QUESTION — WHAT DOES CDK DIFF DO?
+Explained that cdk diff compares the locally synthesized infrastructure
+definition with the deployed CloudFormation stack and shows additions,
+changes, removals, and possible replacements. An undeployed stack appears
+as new resources. It does not deploy changes; by default it may create a
+read-only CloudFormation change set to assess replacement accurately.
+Contrast: synth generates template; diff previews changes; deploy applies them.
+No commands against AWS or source changes performed while answering.
+
+PREDEPLOYMENT REVIEW — NOVEMBER 22, 2026
+Student requested review of both logs and help with CLI/console verification,
+offering to capture individual screenshots. Preserve the interactive pace.
+Reviewed both records, current CDK source, startup script, and Git state.
+AWS identity call succeeded; configured region is us-east-1.
+Fresh synthesis of both stacks and bash syntax check passed. Read-only
+cdk diff --app /tmp/cdk-lab-predeploy-review --no-change-set showed additions
+for both stacks (two stacks with differences).
+Found a functional omission: ALB security group had only the deny-all dummy
+egress rule, without HTTP access to its instance targets. Explained the issue,
+then added load_balancer.connections.allow_to(web_server_security_group,
+ec2.Port.tcp(80), ...). Resynthesis passed; standalone SG egress resource
+verified to allow ALB -> web-server SG on TCP 80. No new student mistake.
+Recorded current report checkpoint and planned evidence/screenshot sequence.
+Older report entries remain historical and are superseded by that checkpoint.
+Starter test remains unfinished; no pytest pass claimed. Regional compatibility
+and bootstrap checks still pending. No application deployment, cleanup,
+commit, or GitHub publication performed in this review.
+Next: finish predeployment checks and capture the deployment diff in the
+student's terminal, then deploy and verify each requirement one step at a time.
+
+LIVE VERIFICATION — STUDENT OBSERVATIONS, NOVEMBER 22, 2026
+Student reports that the website loads through the load-balancer address and
+that the displayed server IP/identifier changes when reloading. Student also
+reports checking the two EC2 instances' Availability Zone placement in the
+console. Screenshots, actual AZ names, instance IDs, URL, and CLI outputs have
+not yet been supplied for inclusion in this report.
+Clarification: different identifiers in the served page demonstrate different
+backends responding. A change only in the load balancer DNS-resolved IP does
+not establish which backend served the request.
+Remaining evidence: successful CloudFormation stack statuses; subnet and route
+inventory; web and RDS security-group rules; RDS available/MySQL/private status
+and both private subnet group members; ALB listener and two healthy targets;
+actual screenshots/output references; cleanup results; final GitHub URL.
